@@ -2625,6 +2625,12 @@ static int32 battle_range_type(struct block_list *src, struct block_list *target
 		case BO_ACIDIFIED_ZONE_FIRE_ATK:
 		case BO_ACIDIFIED_ZONE_GROUND_ATK:
 		case BO_ACIDIFIED_ZONE_WIND_ATK:
+		case KO_HAPPOKUNAI:
+		case SS_FUUMAKOUCHIKU:
+		case SS_FUUMAKOUCHIKU_BLASTING:
+		case SS_KUNAIKAITEN:
+		case SS_KUNAIKUSSETSU:
+		case SS_HITOUAKUMU:
 		case NW_THE_VIGILANTE_AT_NIGHT:
 			return BF_LONG;
 		case NJ_KIRIKAGE: // Cast range mimics NJ_SHADOWJUMP but damage is considered melee
@@ -2636,6 +2642,7 @@ static int32 battle_range_type(struct block_list *src, struct block_list *target
 		case MT_RUSH_STRIKE: // 7 cell cast range.
 		case ABC_UNLUCKY_RUSH: // 7 cell cast range.
 		case MH_THE_ONE_FIGHTER_RISES: // 7 cell cast range.
+		case SS_SHIMIRU: // 11 cell cast range.
 		//case ABC_DEFT_STAB: // 2 cell cast range???
 		case NPC_MAXPAIN_ATK:
 			return BF_SHORT;
@@ -2856,8 +2863,12 @@ static bool is_skill_using_arrow(struct block_list *src, int32 skill_id)
 		status_data* sstatus = status_get_status_data(*src);
 		map_session_data *sd = BL_CAST(BL_PC, src);
 
-		return ((sd && sd->state.arrow_atk) || (!sd && ((skill_id && skill_get_ammotype(skill_id)) || sstatus->rhw.range>3))
-			|| skill_id == HT_FREEZINGTRAP || (skill_id == HT_PHANTASMIC) || (skill_id == GS_GROUNDDRIFT));
+		return ((sd && sd->state.arrow_atk) || (!sd && ((skill_id && skill_get_ammotype(skill_id)) || sstatus->rhw.range>3)) 
+				|| (skill_id == HT_PHANTASMIC) 
+				|| (skill_id == GS_GROUNDDRIFT)
+				|| (skill_id == SS_KUNAIKUSSETSU)
+				|| (skill_id == SS_KUNAIKAITEN)
+				);
 	} else
 		return false;
 }
@@ -3009,16 +3020,26 @@ static bool is_attack_critical(struct Damage* wd, struct block_list *src, struct
 				if (sc && !sc->getSCE(SC_CALAMITYGALE))
 					return false;
 				break;
+			case SKE_NOON_BLAST:
+				if (!(sc && (sc->getSCE(SC_NOON_SUN) || sc->getSCE(SC_SKY_ENCHANT))))
+					return false;
+				break;
+			case SKE_SUNSET_BLAST:
+				if (!(sc && (sc->getSCE(SC_SUNSET_SUN) || sc->getSCE(SC_SKY_ENCHANT))))
+					return false;
+				break;
 			case NW_ONLY_ONE_BULLET:
 			case NW_SPIRAL_SHOOTING:
-				if( sd == nullptr || sd->weapontype1 != W_RIFLE ){
+				if (!(sd && sd->weapontype1 == W_RIFLE))
 					return false;
-				}
 				break;
 			case NW_MAGAZINE_FOR_ONE:
-				if( sd == nullptr || sd->weapontype1 != W_REVOLVER ){
+				if (!(sd && sd->weapontype1 == W_REVOLVER))
 					return false;
-				}
+				break;
+			case SH_CHUL_HO_SONIC_CLAW:
+				if (!(sd && pc_checkskill(sd, SH_COMMUNE_WITH_CHUL_HO)) || !(sc && sc->getSCE(SC_TEMPORARY_COMMUNION)))
+					return false;
 				break;
 		}
 		if(tsd && tsd->bonus.critical_def)
@@ -3483,6 +3504,12 @@ int32 battle_get_weapon_element(struct Damage* wd, struct block_list *src, struc
 			if (sd && sd->flicker) //Force RL_H_MINE deals fire damage if activated by RL_FLICKER
 				element = ELE_FIRE;
 			break;
+		case SS_FUUMASHOUAKU:
+		case SS_FUUMAKOUCHIKU:
+		case SS_FUUMAKOUCHIKU_BLASTING:
+				if (sd)
+					element = sd->bonus.arrow_ele;
+			break;
 		case NW_BASIC_GRENADE:
 		case NW_HASTY_FIRE_IN_THE_HOLE:
 		case NW_GRENADES_DROPPING:
@@ -3584,6 +3611,28 @@ int32 battle_get_magic_element(struct block_list* src, struct block_list* target
 		case TR_SOUNDBLEND:
 			if (sd)
 				element = sd->bonus.arrow_ele;
+			break;
+		case SS_ANKOKURYUUAKUMU:
+			if (mflag & SKILL_ALTDMG_FLAG)
+				element = ELE_FIRE;
+			break;
+		case SU_CN_METEOR:
+		case SH_HYUN_ROKS_BREEZE:
+		case SH_HYUN_ROK_CANNON:
+			if (sc && sc->count) {
+				if (sc->getSCE(SC_COLORS_OF_HYUN_ROK_1))
+					element = ELE_WATER;
+				else if (sc->getSCE(SC_COLORS_OF_HYUN_ROK_2))
+					element = ELE_WIND;
+				else if (sc->getSCE(SC_COLORS_OF_HYUN_ROK_3))
+					element = ELE_EARTH;
+				else if (sc->getSCE(SC_COLORS_OF_HYUN_ROK_4))
+					element = ELE_FIRE;
+				else if (sc->getSCE(SC_COLORS_OF_HYUN_ROK_5))
+					element = ELE_DARK;
+				else if (sc->getSCE(SC_COLORS_OF_HYUN_ROK_6))
+					element = ELE_HOLY;
+			}
 			break;
 	}
 
@@ -6315,6 +6364,179 @@ static int32 battle_calc_attack_skill_ratio(struct Damage* wd, struct block_list
 			skillratio += 5 * sstatus->con;
 			RE_LVL_DMOD(100);
 			break;
+		case SS_SHIMIRU:
+			skillratio += -100 + 700 * skill_lv + 5 * sstatus->con;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_KAGEGARI:
+			skillratio += -100 + 960 * skill_lv; 
+			skillratio += 400 + pc_checkskill(sd, SS_KAGEGISSEN) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_KAGEAKUMU:
+		case SS_HITOUAKUMU:
+			skillratio += -100 + 18000 + 5 * sstatus->pow;
+			if (tsc && tsc->getSCE(SC_NIGHTMARE))
+				skillratio += skillratio / 2;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_KAGENOMAI:
+			skillratio += -100 + 400 * skill_lv;
+			skillratio += 550 + pc_checkskill(sd, SS_KAGEGARI) * 70;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			if (wd->miscflag & SKILL_ALTDMG_FLAG)
+				skillratio = skillratio * 3 / 10;
+			break;
+		case SS_FUUMASHOUAKU:
+			skillratio += -100 + 540 * skill_lv;
+			skillratio += 200 + pc_checkskill(sd, SS_FUUMAKOUCHIKU) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * 5;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_FUUMAKOUCHIKU:
+			skillratio += -100 + 1840 * skill_lv;
+			skillratio += pc_checkskill(sd, SS_FUUMASHOUAKU) * 100;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * 5;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_FUUMAKOUCHIKU_BLASTING:
+			skillratio += -100 + 800 + (600 + pc_checkskill(sd, SS_FUUMASHOUAKU) * 30) * skill_lv + 5 * sstatus->pow;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_KUNAIWAIKYOKU:
+			skillratio += -100 + 630 * skill_lv;
+			skillratio += 600 + pc_checkskill(sd, SS_KUNAIKUSSETSU) * 10;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * 5;
+			RE_LVL_DMOD(100);
+			if (wd->miscflag & SKILL_ALTDMG_FLAG)
+				skillratio = skillratio * 3 / 10;
+			break;
+		case SS_KUNAIKUSSETSU:
+			skillratio += -100 + 200 + (360 + pc_checkskill(sd, SS_KUNAIKAITEN) * 10) * skill_lv + 5 * sstatus->pow;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_KUNAIKAITEN:
+			skillratio += -100 + 620 * skill_lv;
+			skillratio += 700 + pc_checkskill(sd, SS_KUNAIWAIKYOKU) * 50;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * 5;
+			RE_LVL_DMOD(100);
+			break;
+		case SS_KAGEGISSEN:
+			skillratio += -100 + 1100 * skill_lv;
+			skillratio += 700 + pc_checkskill(sd, SS_KAGENOMAI) * 150;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * 5;
+			RE_LVL_DMOD(100);
+			if (wd->miscflag & SKILL_ALTDMG_FLAG)
+				skillratio = skillratio * 3 / 10;
+			break;
+		case SKE_MIDNIGHT_KICK:
+			skillratio += -100 + 2100 * skill_lv;
+			skillratio += 1200 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			if (sc && (sc->getSCE(SC_MIDNIGHT_MOON) || sc->getSCE(SC_SKY_ENCHANT)))
+				skillratio += 950 + 250 * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_ALL_IN_THE_SKY:
+			skillratio += -100 + 3000 + 2000 * skill_lv + 5 * sstatus->pow;
+			if (status_get_race(target) == RC_DEMIHUMAN || status_get_race(target) == RC_DEMON)
+				wd->div_ = 3;
+			break;
+		case SKE_TWINKLING_GALAXY:
+			skillratio += -100 + 500 * skill_lv;
+			skillratio += 400 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_STAR_CANNON:
+			skillratio += -100 + 500 * skill_lv;
+			skillratio += 400 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_STAR_BURST:
+			skillratio += -100 + 500 * skill_lv;
+			skillratio += 400 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_DAWN_BREAK:
+			skillratio += -100 + 1050 * skill_lv;
+			skillratio += 400 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			if (sc && (sc->getSCE(SC_DAWN_MOON) || sc->getSCE(SC_SKY_ENCHANT)))
+				skillratio += 200 * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_SUNSET_BLAST:
+			skillratio += -100 + 600 * skill_lv;
+			skillratio += 400 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5;
+			skillratio += 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_RISING_MOON:
+			skillratio += -100 + 700 + (450 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5) * skill_lv + 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_NOON_BLAST:
+			skillratio += -100 + 1500 + (1250 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5) * skill_lv + 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SKE_RISING_SUN:
+			skillratio += -100 + 500 + (600 + pc_checkskill(sd, SKE_SKY_MASTERY) * 5) * skill_lv + 5 * sstatus->pow;
+			skillratio += status_get_lv(src) * skill_lv;
+			RE_LVL_DMOD(100);
+			break;
+		case SH_CHUL_HO_SONIC_CLAW:
+			skillratio += -100 + 850 + 1650 * skill_lv;
+			skillratio += 50 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+			skillratio += 5 * sstatus->pow;
+
+			if (pc_checkskill(sd, SH_COMMUNE_WITH_CHUL_HO) > 0 || (sc && sc->getSCE(SC_TEMPORARY_COMMUNION))) {
+				skillratio += 100 + 400 * skill_lv;
+				skillratio += 50 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+			}
+			RE_LVL_DMOD(100);
+			break;
+		case SH_HOWLING_OF_CHUL_HO:
+			skillratio += -100 + 600 + 1050 * skill_lv;
+			skillratio += 50 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+			skillratio += 5 * sstatus->pow;
+
+			if (pc_checkskill(sd, SH_COMMUNE_WITH_CHUL_HO) > 0 || (sc && sc->getSCE(SC_TEMPORARY_COMMUNION))) {
+				skillratio += 100 + 100 * skill_lv;
+				skillratio += 50 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+			}
+			RE_LVL_DMOD(100);
+			break;
+		case SH_HOGOGONG_STRIKE:
+			skillratio += -100 + 180 + 200 * skill_lv;
+			skillratio += 10 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+			skillratio += 5 * sstatus->pow;
+
+			if (pc_checkskill(sd, SH_COMMUNE_WITH_CHUL_HO) > 0 || (sc && sc->getSCE(SC_TEMPORARY_COMMUNION))) {
+				skillratio += 70 + 150 * skill_lv;
+				skillratio += 10 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+			}
+			RE_LVL_DMOD(100);
+			break;
 	}
 	return skillratio;
 }
@@ -7833,6 +8055,20 @@ struct Damage battle_calc_magic_attack(struct block_list *src,struct block_list 
 				ad.div_ = 2;
 			}
 			break;
+		case SOA_TALISMAN_OF_FOUR_BEARING_GOD:
+			if (sc){
+				if (sc->getSCE(SC_T_FIRST_GOD))
+					ad.div_ = 2;
+				else if (sc->getSCE(SC_T_SECOND_GOD))
+					ad.div_ = 3;
+				else if (sc->getSCE(SC_T_THIRD_GOD))
+					ad.div_ = 4;
+				else if (sc->getSCE(SC_T_FOURTH_GOD))
+					ad.div_ = 5;
+				else if (sc->getSCE(SC_T_FIFTH_GOD))
+					ad.div_ = 7;
+			}
+			break;
 	}
 
 	//Set miscellaneous data that needs be filled
@@ -7947,6 +8183,10 @@ struct Damage battle_calc_magic_attack(struct block_list *src,struct block_list 
 					MATK_ADD(sstatus->matk_min);
 				}
 
+				if (sd) { // Soul energy spheres adds MATK.
+					MATK_ADD(3*sd->soulball);
+				}
+
 				if (nk[NK_SPLASHSPLIT]) { // Divide MATK in case of multiple targets skill
 					if (mflag>0)
 						ad.damage /= mflag;
@@ -8021,6 +8261,225 @@ struct Damage battle_calc_magic_attack(struct block_list *src,struct block_list 
 						break;
 					case WZ_WATERBALL:
 						skillratio += 30 * skill_lv;
+						break;
+					case SS_TOKEDASU:
+						skillratio += -100 + 700 * skill_lv + 5 * sstatus->con;
+						RE_LVL_DMOD(100);
+						break;
+					case SS_SEKIENHOU:
+						skillratio += -100 + 850 + (1250 + 70 * pc_checkskill(sd, SS_ANTENPOU)) * skill_lv + 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SS_REIKETSUHOU:
+						skillratio += -100 + 250 + (550 + 40 * pc_checkskill(sd, SS_ANTENPOU)) * skill_lv + 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SS_KINRYUUHOU:
+						skillratio += -100 + 300 + (400 + 15 * pc_checkskill(sd, SS_ANTENPOU)) * skill_lv + 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SS_ANKOKURYUUAKUMU:
+						skillratio += -100 + 15500 * skill_lv + 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SS_RAIDENPOU:
+						skillratio += -100 + 600 + (1300 + 70 * pc_checkskill(sd, SS_ANTENPOU)) * skill_lv + 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SS_ANTENPOU:
+						skillratio += -100 + 450 + 950 * skill_lv + 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						if (mflag & SKILL_ALTDMG_FLAG)
+							skillratio = skillratio * 3 / 10;
+						break;
+					case HN_NAPALM_VULCAN_STRIKE:
+						skillratio += -100 + 350 + 650 * skill_lv;
+						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 4 * skill_lv;
+						skillratio += 3 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_NAPALM_VULCAN_STRIKE by (2x skill level)%
+						skillratio += skillratio * 2 * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
+						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
+						if (sc && sc->getSCE(SC_RULEBREAK))
+							skillratio += skillratio * 40 / 100;
+						break;
+					case HN_JUPITEL_THUNDER_STORM:
+						skillratio += -100 + 1800 * skill_lv;
+						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 3 * skill_lv;
+						skillratio += 3 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_JUPITEL_THUNDER_STORM by (skill level)%
+						skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
+						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
+						if (sc && sc->getSCE(SC_RULEBREAK))
+							skillratio += skillratio * 70 / 100;
+						break;
+					case HN_HELLS_DRIVE:
+						skillratio += -100 + 1700 + 900 * skill_lv;
+						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 4 * skill_lv;
+						skillratio += 3 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_HELLS_DRIVE by (skill level)%
+						skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
+						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
+						if (sc && sc->getSCE(SC_RULEBREAK))
+							skillratio += skillratio * 70 / 100;
+						break;
+					case HN_GROUND_GRAVITATION:
+						if (mflag & SKILL_ALTDMG_FLAG) {
+							// Initial damage
+							skillratio += -100 + 3000 + 1500 * skill_lv;
+							skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 4 * skill_lv;
+							skillratio += 5 * sstatus->spl;
+							ad.div_ = -2;
+						} else {
+							// Gravitational field damage
+							skillratio += -100 + 800 + 700 * skill_lv;
+							skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 2 * skill_lv;
+							skillratio += 2 * sstatus->spl;
+						}
+						RE_LVL_DMOD(100);
+						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_GROUND_GRAVITATION (gravity field damage) by (skill level)%
+						if (!(mflag & SKILL_ALTDMG_FLAG))
+							skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
+						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
+						if (sc && sc->getSCE(SC_RULEBREAK))
+							skillratio += skillratio * 50 / 100;
+						break;
+					case HN_JACK_FROST_NOVA:
+						if (mflag & SKILL_ALTDMG_FLAG) {
+							// Initial damage
+							skillratio += -100 + 200 * skill_lv;
+							skillratio += 2 * sstatus->spl;
+							ad.div_ = 1;	// 1 hit
+						} else {
+							// Explosion damage
+							skillratio += -100 + 400 + 500 * skill_lv;
+							skillratio += 4 * sstatus->spl;
+						}
+						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 3 * skill_lv;
+						RE_LVL_DMOD(100);
+						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_JACK_FROST_NOVA (explosion damage) by (skill level)%
+						if (!(mflag & SKILL_ALTDMG_FLAG))
+							skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
+						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
+						if (sc && sc->getSCE(SC_RULEBREAK))
+							skillratio += skillratio * 70 / 100;
+						break;
+					case HN_METEOR_STORM_BUSTER:
+						if (mflag & SKILL_ALTDMG_FLAG) {
+							// Fall damage
+							skillratio += -100 + 300 + 320 * skill_lv;
+							ad.div_ = -3;
+						} else {
+							// Explosion damage
+							skillratio += -100 + 450 + 160 * skill_lv;
+						}
+						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 5 * skill_lv;
+						skillratio += 3 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_METEOR_STORM_BUSTER (fall damage) by (skill level)%
+						if (mflag & SKILL_ALTDMG_FLAG)
+							skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
+						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
+						if (sc && sc->getSCE(SC_RULEBREAK))
+							skillratio += skillratio * 50 / 100;
+						break;
+				}
+
+				if (sc) {// Insignia's increases the damage of offensive magic by a fixed percentage depending on the element.
+					if ((sc->getSCE(SC_FIRE_INSIGNIA) && sc->getSCE(SC_FIRE_INSIGNIA)->val1 == 3 && s_ele == ELE_FIRE) ||
+						(sc->getSCE(SC_WATER_INSIGNIA) && sc->getSCE(SC_WATER_INSIGNIA)->val1 == 3 && s_ele == ELE_WATER) ||
+						(sc->getSCE(SC_WIND_INSIGNIA) && sc->getSCE(SC_WIND_INSIGNIA)->val1 == 3 && s_ele == ELE_WIND) ||
+						(sc->getSCE(SC_EARTH_INSIGNIA) && sc->getSCE(SC_EARTH_INSIGNIA)->val1 == 3 && s_ele == ELE_EARTH))
+						skillratio += 25;
+				}
+						break;
+					case SH_HYUN_ROKS_BREEZE:
+						skillratio += -100 + 650 + 750 * skill_lv;
+						skillratio += 20 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+						skillratio += 5 * sstatus->spl;
+
+						if (pc_checkskill(sd, SH_COMMUNE_WITH_HYUN_ROK) > 0 || (sc && sc->getSCE(SC_TEMPORARY_COMMUNION))) {
+							skillratio += 100 + 200 * skill_lv;
+							skillratio += 20 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+						}
+						RE_LVL_DMOD(100);
+						break;
+					case SH_HYUN_ROK_CANNON:
+						skillratio += -100 + 1050 + 1550 * skill_lv;
+						skillratio += 50 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+						skillratio += 5 * sstatus->spl;
+
+						if (pc_checkskill(sd, SH_COMMUNE_WITH_HYUN_ROK) > 0 || (sc && sc->getSCE(SC_TEMPORARY_COMMUNION))) {
+							skillratio += 300 * skill_lv;
+							skillratio += 25 * pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY);
+						}
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_EXORCISM_OF_MALICIOUS_SOUL:
+						skillratio += -100 + 150 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_SOUL_MASTERY) * 2;
+						skillratio += 1 * sstatus->spl;
+
+						if (tsc && tsc->getSCE(SC_SOULCURSE) || sc && sc->getSCE(SC_TOTEM_OF_TUTELARY))
+							skillratio += 100 * skill_lv;
+
+						if (sd != nullptr)
+							skillratio *= sd->soulball_old;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_TALISMAN_OF_BLUE_DRAGON:
+						skillratio += -100 + 850 + 2250 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 15 * skill_lv;
+						skillratio += 5 * sstatus->spl;
+						if (sc && sc->getSCE(SC_T_FIFTH_GOD))
+							skillratio += 100 + 700 * skill_lv;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_TALISMAN_OF_WHITE_TIGER:
+						skillratio += -100 + 400 + 1000 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 15 * skill_lv;
+						skillratio += 5 * sstatus->spl;
+						if (sc && sc->getSCE(SC_T_FIFTH_GOD))
+							skillratio += 400 * skill_lv;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_TALISMAN_OF_RED_PHOENIX:
+						skillratio += -100 + 1400 + 1450 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 15 * skill_lv;
+						skillratio += 5 * sstatus->spl;
+						if (sc && sc->getSCE(SC_T_FIFTH_GOD))
+							skillratio += 200 + 400 * skill_lv;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_TALISMAN_OF_BLACK_TORTOISE:
+						skillratio += -100 + 2150 + 1600 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 15 * skill_lv;
+						skillratio += 5 * sstatus->spl;
+						if (sc && sc->getSCE(SC_T_FIFTH_GOD))
+							skillratio += 150 + 500 * skill_lv;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_CIRCLE_OF_DIRECTIONS_AND_ELEMENTALS:
+						skillratio += -100 + 500 + 2000 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 15 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_SOUL_MASTERY) * 15 * skill_lv;
+						skillratio += 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_TALISMAN_OF_FOUR_BEARING_GOD:
+						skillratio += -100 + 50 + 250 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 15 * skill_lv;
+						skillratio += 5 * sstatus->spl;
+						RE_LVL_DMOD(100);
+						break;
+					case SOA_TALISMAN_OF_SOUL_STEALING:
+						skillratio += -100 + 500 + 1250 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_TALISMAN_MASTERY) * 7 * skill_lv;
+						skillratio += pc_checkskill(sd, SOA_SOUL_MASTERY) * 7 * skill_lv;
+						skillratio += 3 * sstatus->spl;
+						RE_LVL_DMOD(100);
 						break;
 					case WZ_STORMGUST:
 #ifdef RENEWAL
@@ -8374,6 +8833,8 @@ struct Damage battle_calc_magic_attack(struct block_list *src,struct block_list 
 					case SU_CN_METEOR2:
 						skillratio += 100 + 100 * skill_lv + sstatus->int_ * 5; // !TODO: Confirm INT bonus
 						RE_LVL_DMOD(100);
+						if (sc && sc->getSCE(SC_COLORS_OF_HYUN_ROK_BUFF))
+							skillratio += skillratio * 50 / 100;
 						break;
 					case NPC_VENOMFOG:
 						skillratio += 600 + 100 * skill_lv;
@@ -8691,108 +9152,6 @@ struct Damage battle_calc_magic_attack(struct block_list *src,struct block_list 
 					case NPC_RAINOFMETEOR:
 						skillratio += 350;	// unknown ratio
 						break;
-					case HN_NAPALM_VULCAN_STRIKE:
-						skillratio += -100 + 350 + 650 * skill_lv;
-						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 4 * skill_lv;
-						skillratio += 3 * sstatus->spl;
-						RE_LVL_DMOD(100);
-						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_NAPALM_VULCAN_STRIKE by (2x skill level)%
-						skillratio += skillratio * 2 * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
-						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
-						if (sc && sc->getSCE(SC_RULEBREAK))
-							skillratio += skillratio * 40 / 100;
-						break;
-					case HN_JUPITEL_THUNDER_STORM:
-						skillratio += -100 + 1800 * skill_lv;
-						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 3 * skill_lv;
-						skillratio += 3 * sstatus->spl;
-						RE_LVL_DMOD(100);
-						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_JUPITEL_THUNDER_STORM by (skill level)%
-						skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
-						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
-						if (sc && sc->getSCE(SC_RULEBREAK))
-							skillratio += skillratio * 70 / 100;
-						break;
-					case HN_HELLS_DRIVE:
-						skillratio += -100 + 1700 + 900 * skill_lv;
-						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 4 * skill_lv;
-						skillratio += 3 * sstatus->spl;
-						RE_LVL_DMOD(100);
-						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_HELLS_DRIVE by (skill level)%
-						skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
-						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
-						if (sc && sc->getSCE(SC_RULEBREAK))
-							skillratio += skillratio * 70 / 100;
-						break;
-					case HN_GROUND_GRAVITATION:
-						if (mflag & SKILL_ALTDMG_FLAG) {
-							// Initial damage
-							skillratio += -100 + 3000 + 1500 * skill_lv;
-							skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 4 * skill_lv;
-							skillratio += 5 * sstatus->spl;
-							ad.div_ = -2;
-						} else {
-							// Gravitational field damage
-							skillratio += -100 + 800 + 700 * skill_lv;
-							skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 2 * skill_lv;
-							skillratio += 2 * sstatus->spl;
-						}
-						RE_LVL_DMOD(100);
-						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_GROUND_GRAVITATION (gravity field damage) by (skill level)%
-						if (!(mflag & SKILL_ALTDMG_FLAG))
-							skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
-						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
-						if (sc && sc->getSCE(SC_RULEBREAK))
-							skillratio += skillratio * 50 / 100;
-						break;
-					case HN_JACK_FROST_NOVA:
-						if (mflag & SKILL_ALTDMG_FLAG) {
-							// Initial damage
-							skillratio += -100 + 200 * skill_lv;
-							skillratio += 2 * sstatus->spl;
-							ad.div_ = 1;	// 1 hit
-						} else {
-							// Explosion damage
-							skillratio += -100 + 400 + 500 * skill_lv;
-							skillratio += 4 * sstatus->spl;
-						}
-						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 3 * skill_lv;
-						RE_LVL_DMOD(100);
-						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_JACK_FROST_NOVA (explosion damage) by (skill level)%
-						if (!(mflag & SKILL_ALTDMG_FLAG))
-							skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
-						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
-						if (sc && sc->getSCE(SC_RULEBREAK))
-							skillratio += skillratio * 70 / 100;
-						break;
-					case HN_METEOR_STORM_BUSTER:
-						if (mflag & SKILL_ALTDMG_FLAG) {
-							// Fall damage
-							skillratio += -100 + 300 + 320 * skill_lv;
-							ad.div_ = -3;
-						} else {
-							// Explosion damage
-							skillratio += -100 + 450 + 160 * skill_lv;
-						}
-						skillratio += pc_checkskill(sd, HN_SELFSTUDY_SOCERY) * 5 * skill_lv;
-						skillratio += 3 * sstatus->spl;
-						RE_LVL_DMOD(100);
-						// After RE_LVL_DMOD calculation, HN_SELFSTUDY_SOCERY amplifies the skill ratio of HN_METEOR_STORM_BUSTER (fall damage) by (skill level)%
-						if (mflag & SKILL_ALTDMG_FLAG)
-							skillratio += skillratio * pc_checkskill(sd, HN_SELFSTUDY_SOCERY) / 100;
-						// SC_RULEBREAK increases the skill ratio after HN_SELFSTUDY_SOCERY
-						if (sc && sc->getSCE(SC_RULEBREAK))
-							skillratio += skillratio * 50 / 100;
-						break;
-				}
-
-				if (sc) {// Insignia's increases the damage of offensive magic by a fixed percentage depending on the element.
-					if ((sc->getSCE(SC_FIRE_INSIGNIA) && sc->getSCE(SC_FIRE_INSIGNIA)->val1 == 3 && s_ele == ELE_FIRE) ||
-						(sc->getSCE(SC_WATER_INSIGNIA) && sc->getSCE(SC_WATER_INSIGNIA)->val1 == 3 && s_ele == ELE_WATER) ||
-						(sc->getSCE(SC_WIND_INSIGNIA) && sc->getSCE(SC_WIND_INSIGNIA)->val1 == 3 && s_ele == ELE_WIND) ||
-						(sc->getSCE(SC_EARTH_INSIGNIA) && sc->getSCE(SC_EARTH_INSIGNIA)->val1 == 3 && s_ele == ELE_EARTH))
-						skillratio += 25;
-				}
 #ifdef RENEWAL
 				has_skillratio = true;
 #else
@@ -10006,7 +10365,7 @@ enum damage_lv battle_weapon_attack(struct block_list* src, struct block_list* t
 		if (dist <= 0 || (!map_check_dir(dir,t_dir) && dist <= tstatus->rhw.range+1)) {
 			uint16 skill_lv = tsc->getSCE(SC_AUTOCOUNTER)->val1;
 
-			clif_skillcastcancel( *target ); //Remove the casting bar. [Skotlex]
+			clif_skillcastcancel(*target); //Remove the casting bar. [Skotlex]
 			clif_damage(*src, *target, tick, sstatus->amotion, 1, 0, 1, DMG_NORMAL, 0, false); //Display MISS.
 			status_change_end(target, SC_AUTOCOUNTER);
 			skill_attack(BF_WEAPON,target,target,src,KN_AUTOCOUNTER,skill_lv,tick,0);

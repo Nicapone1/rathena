@@ -4201,6 +4201,10 @@ int32 status_calc_pc_sub(map_session_data* sd, uint8 opt)
 	if ((skill = pc_checkskill(sd, NW_GRENADE_MASTERY)) > 0)
 		base_status->con += skill;
 
+// ----- SPELL CALCULATION -----
+	if ((skill = pc_checkskill(sd, SOA_SOUL_MASTERY)) > 0)
+		base_status->spl += skill;
+
 // ------ ATTACK CALCULATION ------
 
 	// Base batk value is set in status_calc_misc
@@ -4373,7 +4377,8 @@ int32 status_calc_pc_sub(map_session_data* sd, uint8 opt)
 		base_status->hit += 20;
 	if ((skill = pc_checkskill_imperial_guard(sd, 2)) > 0)// IG_SPEAR_SWORD_M
 		base_status->hit += skill * 3;
-
+	if ((skill = pc_checkskill(sd, SKE_WAR_BOOK_MASTERY))>0)
+		base_status->hit += skill * 3;
 	if ((skill = pc_checkskill(sd, SU_SOULATTACK)) > 0)
 		base_status->rhw.range += skill_get_range2(&sd->bl, SU_SOULATTACK, skill, true);
 
@@ -4417,6 +4422,14 @@ int32 status_calc_pc_sub(map_session_data* sd, uint8 opt)
 		base_status->smatk += skill;
 	if ((skill = pc_checkskill(sd, NW_P_F_I)) > 0 && (sd->status.weapon >= W_REVOLVER && sd->status.weapon <= W_GRENADE))
 		base_status->patk += skill + 2;
+	if ((skill = pc_checkskill(sd, SOA_TALISMAN_MASTERY)) > 0)
+		base_status->smatk += skill;
+	if ((skill = pc_checkskill(sd, SKE_WAR_BOOK_MASTERY)) > 0)
+		base_status->patk += skill + 2;
+	if ((skill = pc_checkskill(sd, SH_MYSTICAL_CREATURE_MASTERY)) > 0) {
+		base_status->smatk += skill+ 2;
+		base_status->patk += skill + 2;
+	}
 
 	// 2-Handed Staff Mastery
 	if( sd->status.weapon == W_2HSTAFF && ( skill = pc_checkskill( sd, AG_TWOHANDSTAFF ) ) > 0 ){
@@ -4797,6 +4810,12 @@ int32 status_calc_pc_sub(map_session_data* sd, uint8 opt)
 			pc_bonus(sd, SP_MATK_RATE, sc->getSCE(SC_CATNIPPOWDER)->val2);
 		if (sc->getSCE(SC_NIBELUNGEN) && sc->getSCE(SC_NIBELUNGEN)->val2 == RINGNBL_MATKRATE)
 			pc_bonus(sd, SP_MATK_RATE, 20);
+		if( sc->getSCE(SC_HEAVEN_AND_EARTH) ) {
+			i = sc->getSCE(SC_HEAVEN_AND_EARTH)->val2;
+			sd->indexed_bonus.magic_atk_ele[ELE_ALL] += i;
+			sd->bonus.short_attack_atk_rate += i;
+			sd->bonus.long_attack_atk_rate += i;
+		}
 	}
 	status_cpy(&sd->battle_status, base_status);
 
@@ -8227,6 +8246,12 @@ static signed short status_calc_patk(struct block_list *bl, status_change *sc, i
 	}
 	if (sc->getSCE(SC_HIDDEN_CARD))
 		patk += sc->getSCE(SC_HIDDEN_CARD)->val2;
+	if (sc->getSCE(SC_TEMPORARY_COMMUNION))
+		patk += sc->getSCE(SC_TEMPORARY_COMMUNION)->val2;
+	if (sc->getSCE(SC_BLESSING_OF_M_CREATURES))
+		patk += sc->getSCE(SC_BLESSING_OF_M_CREATURES)->val2;
+	if (sc->getSCE(SC_TALISMAN_OF_WARRIOR))
+		patk += sc->getSCE(SC_TALISMAN_OF_WARRIOR)->val2;
 
 	return (short)cap_value(patk, 0, SHRT_MAX);
 }
@@ -8254,6 +8279,14 @@ static signed short status_calc_smatk(struct block_list *bl, status_change *sc, 
 	if( sc->getSCE( SC_ATTACK_STANCE ) ){
 		smatk += sc->getSCE( SC_ATTACK_STANCE )->val3;
 	}
+	if (sc->getSCE(SC_TALISMAN_OF_MAGICIAN))
+		smatk += sc->getSCE(SC_TALISMAN_OF_MAGICIAN)->val2;
+	if (sc->getSCE(SC_T_FIFTH_GOD))
+		smatk += sc->getSCE(SC_T_FIFTH_GOD)->val2;
+	if (sc->getSCE(SC_TEMPORARY_COMMUNION))
+		smatk += sc->getSCE(SC_TEMPORARY_COMMUNION)->val2;
+	if (sc->getSCE(SC_BLESSING_OF_M_CREATURES))
+		smatk += sc->getSCE(SC_BLESSING_OF_M_CREATURES)->val2;
 
 	return (short)cap_value(smatk, 0, SHRT_MAX);
 }
@@ -8306,6 +8339,8 @@ static signed short status_calc_mres(struct block_list *bl, status_change *sc, i
 		mres -= mres * sc->getSCE(SC_SHADOW_STRIP)->val2 / 100;
 	if (sc->getSCE(SC_GEF_NOCTURN))
 		mres -= sc->getSCE(SC_GEF_NOCTURN)->val2;
+	if (sc->getSCE(SC_TOXIN_OF_MANDARA))
+		mres -= mres * sc->getSCE(SC_TOXIN_OF_MANDARA)->val2;
 
 	return (short)cap_value(mres, 0, SHRT_MAX);
 }
@@ -8322,6 +8357,8 @@ static signed short status_calc_hplus(struct block_list *bl, status_change *sc, 
 	if (sc == nullptr || sc->empty())
 		return cap_value(hplus, 0, SHRT_MAX);
 
+	if (sc->getSCE(SC_TEMPORARY_COMMUNION))
+		hplus += sc->getSCE(SC_TEMPORARY_COMMUNION)->val2;
 	return (short)cap_value(hplus, 0, SHRT_MAX);
 }
 
@@ -9131,6 +9168,8 @@ void status_change_init(struct block_list *bl)
 static int32 status_get_sc_interval(enum sc_type type)
 {
 	switch (type) {
+		case SC_STAR_BURST:
+			return 300;
 		case SC_POISON:
 		case SC_LEECHESEND:
 		case SC_DPOISON:
@@ -9492,6 +9531,8 @@ t_tick status_get_sc_def(struct block_list *src, struct block_list *bl, enum sc_
 				if (it.id == type)
 					rate -= rate * it.val / 10000;
 			}
+			 if (sc->getSCE(SC_COMMONSC_RESIST) && SC_COMMON_MIN <= type && type <= SC_COMMON_MAX)
+				rate -= rate*sd->sc.getSCE(SC_COMMONSC_RESIST)->val1/100;
 		}
 
 		// Aegis accuracy
@@ -9519,6 +9560,8 @@ t_tick status_get_sc_def(struct block_list *src, struct block_list *bl, enum sc_
 			if (it.id == type)
 				tick -= tick * it.val / 10000;
 		}
+		if (sd->sc.getSCE(SC_COMMONSC_RESIST) && SC_COMMON_MIN <= type && type <= SC_COMMON_MAX)
+			tick -= tick * sd->sc.getSCE(SC_COMMONSC_RESIST)->val1 / 100;
 	}
 #endif
 
@@ -12419,6 +12462,44 @@ int32 status_change_start(struct block_list* src, struct block_list* bl,enum sc_
 			val2 = 3 * val1;
 			val3 = 10 * val1;
 			break;
+		case SC_TALISMAN_OF_PROTECTION:
+			//heal value is static per cast of skill [munkrej]
+			val3 = skill_calc_heal(src, bl, SOA_TALISMAN_OF_PROTECTION, val1, true);
+			val4 = tick / 3000;
+			//first heal tick applies on cast [munkrej]
+			tick_time = 100;
+			break;
+		case SC_TALISMAN_OF_WARRIOR:
+		case SC_TALISMAN_OF_MAGICIAN:
+			val2 = 2 * val1;
+			break;
+		case SC_T_FIFTH_GOD:
+			val2 = 5 * val1;
+			break;
+		case SC_TALISMAN_OF_FIVE_ELEMENTS:
+			val2 = 4 * val1;
+			break;
+		case SC_HEAVEN_AND_EARTH:
+			val2 = 5 + 2 * val1;
+			break;
+		case SC_KI_SUL_RAMPAGE:
+			val4 = tick / 1000;
+			tick_time = 100;
+			break;
+		case SC_STAR_BURST:
+			tick_time = status_get_sc_interval(type);
+			val4 = tick - tick_time; // Remaining time
+			break;
+		case SC_MARINE_FESTIVAL:
+		case SC_SANDY_FESTIVAL:
+			val2 = 2 * val1;
+			break;
+		case SC_TEMPORARY_COMMUNION:
+			val2 = val1 * 3;
+			break;
+		case SC_BLESSING_OF_M_CREATURES:
+			val2 = val1 * 10;
+			break;
 
 		default:
 			if (calc_flag.none() && scdb->skill_id == 0 && scdb->icon == EFST_BLANK && scdb->opt1 == OPT1_NONE && scdb->opt2 == OPT2_NONE && scdb->state.none() && scdb->flag.none() && scdb->endonstart.empty() && scdb->endreturn.empty() && scdb->fail.empty() && scdb->endonend.empty()) {
@@ -13413,6 +13494,10 @@ int32 status_change_end(struct block_list* bl, enum sc_type type, int32 tid)
 				pc_delabyssball( *sd, sd->abyssball );
 			}
 			break;
+		case SC_BLESSING_OF_M_CREATURES:
+			sc_start(bl,bl, SC_BLESSING_OF_M_C_DEBUFF, 100, 1, skill_get_time2(SH_BLESSING_OF_MYSTICAL_CREATURES, 1));
+			status_percent_change(bl,bl,0, 0, -100,1);
+			break;
 	}
 
 	// End statuses found in the EndOnEnd list.
@@ -14048,6 +14133,14 @@ TIMER_FUNC(status_change_timer){
 			skill_castend_damage_id( bl, bl, GN_HELLS_PLANT_ATK, sce->val1, tick, 0 );
 		}
 		break;
+	case SC_STAR_BURST:
+		if( --(sce->val4) >= 0 ) {
+			struct block_list *src = map_id2bl(sce->val2);
+			if (sd && tid == INVALID_TIMER) {
+			skill_castend_damage_id( bl, bl, SKE_STAR_BURST, sce->val1, tick, 0 );
+			}
+		}
+		break;
 
 	case SC_VOICEOFSIREN:
 		if( --(sce->val4) >= 0 ) {
@@ -14531,6 +14624,27 @@ TIMER_FUNC(status_change_timer){
 		}
 		sc_timer_next(500 + tick);
 		return 0;
+	case SC_TALISMAN_OF_PROTECTION:
+		if(--(sce->val4) >= 0){
+			// Get the original caster
+			map_session_data* ssd = map_id2sd( sce->val2 );
+
+			// If the caster is offline, dead, on another map or
+			// if the target is not a player or is in another party
+			if( ssd == nullptr || status_isdead( ssd->bl ) || ssd->bl.m != bl->m || sd == nullptr || ssd->status.party_id != sd->status.party_id ){
+				// End the status change
+				sce->val4 = 0;
+				break;
+			}
+
+			int hp = sc->getSCE(SC_TALISMAN_OF_PROTECTION)->val3;
+
+			status_heal( bl, hp, 0, 0, 0 );
+			clif_skill_nodamage( nullptr, *bl, AL_HEAL, hp );
+			sc_timer_next(3000 + tick);
+			return 0;
+		}
+		break;
 	}
 
 	// If status has an interval and there is at least 100ms remaining time, wait for next interval

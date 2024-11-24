@@ -801,6 +801,10 @@ int32 unit_walktoxy( struct block_list *bl, short x, short y, unsigned char flag
 
 	// Start timer to recall summon
 	if( sd != nullptr ){
+		if (sc && sc->getSCE(SC_KI_SUL_RAMPAGE))
+			status_change_end(bl, SC_KI_SUL_RAMPAGE);
+
+		// Start timers to recall summon
 		if (sd->md != nullptr)
 			unit_check_start_teleport_timer(&sd->md->bl);
 		if (sd->ed != nullptr)

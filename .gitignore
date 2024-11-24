@@ -149,3 +149,9 @@ Thumbs.db
 
 # generated files
 generated
+*.bak
+*.json
+*.cmake
+*.in
+*.bin
+*.c

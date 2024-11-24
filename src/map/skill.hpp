@@ -2725,7 +2725,8 @@ enum e_skill_unit_id : uint16 {
 	UNT_SHINKIROU, // Mirage
 	UNT_JACK_FROST_NOVA,
 	UNT_GROUND_GRAVITATION,
-
+	UNT_KUNAIKAITEN,// Shows Nothing
+	UNT_STAR_BURST = 2409,
 	UNT_KUNAIWAIKYOKU = 298, // Kunai - Distortion
 
 	// Skill units outside the normal unit range.
